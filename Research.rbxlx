@@ -1,0 +1,136 @@
+-- Get the character and humanoid
+local character = game.Workspace.Player  -- Replace "CharacterName" with the actual name of your character
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Define the movement speed
+local speed = 16  -- Adjust this value as desired
+
+-- Define the size of the map
+local mapWidth = 2048
+local mapHeight = 2048
+
+-- Define the movements (8-directional)
+local movements = {
+	{1, 0},     -- Right
+	{0, 1},     -- Down
+	{-1, 0},    -- Left
+	{0, -1},    -- Up
+	{1, 1},     -- Bottom-right
+	{-1, 1},    -- Bottom-left
+	{-1, -1},   -- Top-left
+	{1, -1}     -- Top-right
+}
+
+-- Function to calculate the heuristic (Euclidean distance)
+local function heuristic(start, goal)
+	return (start - goal).magnitude
+end
+
+-- Function to reconstruct the path
+local function reconstructPath(node)
+	local path = {}
+
+	while node.parent do
+		table.insert(path, 1, node.position)
+		node = node.parent
+	end
+
+	return path
+end
+
+-- Function to make the character follow the path
+local function followPath(path)
+	for _, position in ipairs(path) do
+		humanoid:MoveTo(position)
+		humanoid.MoveToFinished:Wait()
+	end
+end
+
+-- Function to perform the Fringe Search algorithm
+local function fringeSearch()
+	local start = character.PrimaryPart.Position
+	local goal = Vector3.new(4, 0, 4)  -- Adjust this value as desired
+
+	local fringe = {
+		{
+			position = start,
+			gCost = 0,
+			hCost = heuristic(start, goal),
+			fCost = 0,
+			parent = nil
+		}
+	}
+
+	local closed = {}
+
+	while #fringe > 0 do
+		table.sort(fringe, function(a, b) return a.fCost < b.fCost end)
+
+		local currentNode = table.remove(fringe, 1)
+
+		closed[tostring(currentNode.position)] = true
+
+		if currentNode.position == goal then
+			local path = reconstructPath(currentNode)
+			followPath(path)
+			break
+		end
+
+		local successors = generateSuccessors(currentNode)
+
+		for _, successor in ipairs(successors) do
+			if not closed[tostring(successor.position)] then
+				local tentativeGCost = currentNode.gCost + 1
+
+				local inFringe = false
+				for _, node in ipairs(fringe) do
+					if node.position == successor.position then
+						inFringe = true
+						break
+					end
+				end
+
+				if not inFringe or tentativeGCost < successor.gCost then
+					successor.gCost = tentativeGCost
+					successor.hCost = heuristic(successor.position, goal)
+					successor.fCost = successor.gCost + successor.hCost
+					successor.parent = currentNode
+
+					if not inFringe then
+						fringe[#fringe + 1] = successor
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Function to generate successors of a node
+local function generateSuccessors(node)
+	local successors = {}
+
+	for _, movement in ipairs(movements) do
+		local x = node.position.X + movement[1]
+		local z = node.position.Z + movement[2]
+
+		-- Check if the successor position is within the map boundaries
+		if x >= 1 and x <= mapWidth and z >= 1 and z <= mapHeight then
+			successors[#successors + 1] = {
+				position = Vector3.new(x, node.position.Y, z),
+				gCost = 0,
+				hCost = 0,
+				fCost = 0,
+				parent = nil
+			}
+		end
+	end
+
+	return successors
+end
+
+-- Print character and goal positions for debugging
+print("Character position:", character.PrimaryPart.Position)
+print("Goal position:", goal)
+
+-- Start the Fringe Search algorithm
+fringeSearch()
